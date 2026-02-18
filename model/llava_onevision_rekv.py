@@ -4,6 +4,7 @@ from logzero import logger
 
 from model.patch import patch_hf
 from model.abstract_rekv import Abstract_ReKV
+from model.attention.rekv_attention import clear_neural_kv_error_log, get_neural_kv_error_log
 
 
 class LlavaOneVision_ReKV(LlavaOnevisionForConditionalGeneration, Abstract_ReKV):
@@ -32,6 +33,154 @@ class LlavaOneVision_ReKV(LlavaOnevisionForConditionalGeneration, Abstract_ReKV)
         video_features = self.apply_pooling(video_features)
         video_features = video_features.reshape(batch_size, frames * video_features.shape[1], -1)  # (B, Nv*196, D)
         return video_features
+
+    @torch.inference_mode()
+    def question_answering_with_neural_kv(self, input_text, neural_kv, all_layer_k, all_layer_v,
+                                           max_new_tokens=128):
+        """Question answering using Neural KV cache instead of video KV retrieval.
+
+        The video contribution is computed by neural_kv(Q) and added to text-only attention.
+        Simultaneously computes GT video attention for error tracking.
+
+        Args:
+            input_text: dict with 'question' and 'prompt'
+            neural_kv: trained NeuralKVCache model
+            all_layer_k: list of (num_heads_kv, total_tokens, dim_head) per layer (CPU)
+            all_layer_v: list of (num_heads_kv, total_tokens, dim_head) per layer (CPU)
+            max_new_tokens: max tokens to generate
+        """
+        device = self.device
+        stop_token_ids = [self.processor.tokenizer.eos_token_id]
+        output_ids = []
+        stopped = False
+
+        # Clear error log
+        clear_neural_kv_error_log()
+
+        # Attach neural_kv + video KV to each ContextManager
+        for i, layer_kv in enumerate(self.kv_cache):
+            layer_kv._neural_kv_cache = neural_kv
+            layer_kv._all_video_k = all_layer_k[i]  # (num_heads_kv, T, dim_head) on CPU
+            layer_kv._all_video_v = all_layer_v[i]
+            layer_kv._layer_idx = i
+
+        # Step 1: Encode question tokens with retrieval mode -> triggers Neural KV path
+        input_ids = self.processor.tokenizer(input_text['question']).input_ids
+        input_ids = torch.as_tensor([input_ids], device=device)
+        for layer_kv in self.kv_cache:
+            layer_kv.set_retrieval()
+
+        out = self.language_model(input_ids=input_ids, use_cache=True, past_key_values=self.kv_cache)
+        past_key_values = out.past_key_values  # Now tuples of (k, v, neural_kv_layer, all_video_k, all_video_v, layer_idx)
+
+        for layer_kv in self.kv_cache:
+            layer_kv.reset_retrieval()
+
+        # Step 2: Autoregressive generation
+        for i in range(max_new_tokens):
+            if i == 0:  # prompt prefill
+                input_ids = self.processor.tokenizer(input_text['prompt']).input_ids
+                input_ids = torch.as_tensor([input_ids], device=device)
+                inputs_embeds = self.get_input_embeddings()(input_ids)
+                out = self.language_model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=past_key_values)
+                past_key_values = out.past_key_values
+                logits = out.logits
+            else:  # decoding
+                out = self.language_model(
+                    input_ids=torch.as_tensor([[token]], device=device),
+                    use_cache=True,
+                    past_key_values=past_key_values,
+                )
+                logits = out.logits
+                past_key_values = out.past_key_values
+
+            last_token_logits = logits[0, -1, :]
+            topk_vals, topk_indices = torch.topk(last_token_logits, 5)
+            if i < 3:  # log first 3 decode steps
+                top5_tokens = [(self.processor.tokenizer.decode([idx.item()]), f"{val.item():.2f}")
+                               for val, idx in zip(topk_vals, topk_indices)]
+                logger.info(f"[NeuralKV Decode] Step {i}: top5={top5_tokens}")
+            tokens = [int(index) for index in topk_indices.tolist()]
+            token = tokens[0]
+            output_ids.append(token)
+
+            if token in stop_token_ids:
+                stopped = True
+            else:
+                stopped = False
+
+            if i == max_new_tokens - 1 or stopped:
+                break
+
+        output = self.processor.tokenizer.decode(
+            output_ids,
+            skip_special_tokens=True,
+            spaces_between_special_tokens=False,
+            clean_up_tokenization_spaces=True,
+        )
+
+        # Collect error metrics
+        error_log = get_neural_kv_error_log()
+
+        # Clean up Neural KV attributes from ContextManagers
+        for layer_kv in self.kv_cache:
+            for attr in ('_all_video_k', '_all_video_v',
+                         '_layer_idx', '_neural_kv_cache'):
+                if hasattr(layer_kv, attr):
+                    delattr(layer_kv, attr)
+
+        return output, error_log
+
+    @torch.inference_mode()
+    def question_answering_no_video(self, input_text, max_new_tokens=128):
+        """Answer a question without any video context (text-only baseline).
+
+        Constructs the full conversation (system + question + answer prefix)
+        as a single token sequence and runs autoregressive generation using
+        standard KV cache (no ContextManager / retrieval).
+        """
+        device = self.device
+        stop_token_ids = [self.processor.tokenizer.eos_token_id]
+
+        # Build full prompt: system + formatted question + answer prefix
+        # input_text['prompt'] already contains the full question with formatting
+        # (e.g., "\nQuestion: ...\nOptions:...<|im_end|><|im_start|>assistant\nBest option: (")
+        full_prompt = (
+            '<|im_start|>system \nYou are a helpful assistant.<|im_end|>'
+            '<|im_start|>user '
+            + input_text['prompt']
+        )
+        input_ids = self.processor.tokenizer(full_prompt, return_tensors="pt").input_ids.to(device)
+
+        # Prefill
+        out = self.language_model(input_ids=input_ids, use_cache=True)
+        past_key_values = out.past_key_values
+        logits = out.logits
+
+        output_ids = []
+        for i in range(max_new_tokens):
+            last_token_logits = logits[0, -1, :]
+            _, indices = torch.topk(last_token_logits, 2)
+            token = int(indices[0].item())
+            output_ids.append(token)
+
+            if token in stop_token_ids:
+                break
+
+            out = self.language_model(
+                input_ids=torch.as_tensor([[token]], device=device),
+                use_cache=True,
+                past_key_values=past_key_values,
+            )
+            logits = out.logits
+            past_key_values = out.past_key_values
+
+        return self.processor.tokenizer.decode(
+            output_ids,
+            skip_special_tokens=True,
+            spaces_between_special_tokens=False,
+            clean_up_tokenization_spaces=True,
+        )
 
     @torch.inference_mode()
     def question_answering(self, input_text, max_new_tokens=128, retrieved_indices=None):

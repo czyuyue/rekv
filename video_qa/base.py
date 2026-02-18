@@ -56,7 +56,8 @@ class BaseVQA:
     def __init__(self, anno, save_dir, sample_fps,
                  qa_model, qa_processor=None,
                  num_chunks=None, chunk_idx=None,
-                 retrieve_size=64, chunk_size=1) -> None:
+                 retrieve_size=64, chunk_size=1,
+                 synth_only=False, group_shared=True) -> None:
         
         self.sample_fps = sample_fps
 
@@ -75,6 +76,8 @@ class BaseVQA:
         self.anno = anno
         self.eval_grounding = 'temporal_windows' in anno[0]['conversations'][0]
 
+        self.synth_only = synth_only
+        self.group_shared = group_shared
         self.save_dir = save_dir
         self.choice_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
         self.record = {(self.retrieve_size, self.chunk_size): []}
@@ -133,6 +136,8 @@ class BaseVQA:
 
     def extract_characters_regex(self, s):
         s = s.strip()
+        if not s:
+            return ""
         if ")" in s:
             index = s.index(")")
             pred = s[index - 1 : index]
@@ -150,11 +155,21 @@ class BaseVQA:
     def analyze_a_video(self, video_sample):
         pass
 
-    def analyze(self, debug=False):
-        video_annos = self.anno[:1] if debug else self.anno
+    def analyze(self, debug=False, n_samples=None):
+        if n_samples is not None and n_samples > 0:
+            video_annos = self.anno[:n_samples]
+        elif debug:
+            video_annos = self.anno[:1]
+        else:
+            video_annos = self.anno
+        logger.info(f'[analyze] Running on {len(video_annos)}/{len(self.anno)} videos (debug={debug}, n_samples={n_samples})')
         for video_sample in tqdm(video_annos):
             logger.debug(f'video_id: {video_sample["video_id"]}')
-            self.analyze_a_video(video_sample)
+            try:
+                self.analyze_a_video(video_sample)
+            except Exception as e:
+                logger.error(f'[analyze] Failed on video {video_sample["video_id"]}: {e}')
+                continue
 
         dfs = []
         for (retrieve_size, chunk_size), dict_list in self.record.items():
@@ -190,6 +205,11 @@ def work(QA_CLASS):
     parser.add_argument("--retrieve_size", type=int, default=64)
     parser.add_argument("--retrieve_chunk_size", type=int, default=1)
     parser.add_argument("--debug", type=str2bool, nargs='?', const=True, default=True)
+    parser.add_argument("--n_samples", type=int, default=None, help="Number of video samples to test (overrides --debug)")
+    parser.add_argument("--synth_only", type=str2bool, nargs='?', const=True, default=False,
+                        help="Only train Neural KV with synthetic Q (skip K-as-Q and real Q)")
+    parser.add_argument("--group_shared", type=str2bool, nargs='?', const=True, default=True,
+                        help="Use one MLP per GQA group (True) or per head (False)")
     args = parser.parse_args()
 
     if not args.debug:
@@ -226,6 +246,8 @@ def work(QA_CLASS):
         num_chunks=args.num_chunks,
         chunk_idx=args.chunk_idx,
         save_dir=args.save_dir,
+        synth_only=args.synth_only,
+        group_shared=args.group_shared,
     )
 
-    retrieve_analyzer.analyze(debug=args.debug)
+    retrieve_analyzer.analyze(debug=args.debug, n_samples=args.n_samples)

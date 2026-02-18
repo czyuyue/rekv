@@ -24,7 +24,7 @@ def eval_mlvu(args):
         # QA
         processes = []
         for idx in range(0, num_chunks):
-            cmd = ["python", f"video_qa/{solver}.py",
+            cmd = ["python", "-m", f"video_qa.{solver}",
                     "--model", args.model,
                     "--sample_fps", str(args.sample_fps),
                     "--n_local", str(args.n_local),
@@ -34,6 +34,11 @@ def eval_mlvu(args):
                     "--debug", args.debug,
                     "--num_chunks", str(num_chunks),
                     "--chunk_idx", str(idx)]
+            if args.n_samples is not None:
+                cmd += ["--n_samples", str(args.n_samples)]
+            if args.synth_only:
+                cmd += ["--synth_only", "true"]
+            cmd += ["--group_shared", args.group_shared]
             p = multiprocessing.Process(target=exec, args=(cmd, True, f'{4*idx},{4*idx+1},{4*idx+2},,{4*idx+3}' if args.model=='llava_ov_72b' else str(idx)))  # llava_ov_72b needs 4x 80GB GPUs
             processes.append(p)
             p.start()
@@ -57,7 +62,7 @@ def eval_qaego4d(args):
         # QA
         processes = []
         for idx in range(0, num_chunks):
-            cmd = ["python", f"video_qa/{solver}.py",
+            cmd = ["python", "-m", f"video_qa.{solver}",
                     "--model", args.model,
                     "--sample_fps", str(args.sample_fps),
                     "--n_local", str(args.n_local),
@@ -67,6 +72,11 @@ def eval_qaego4d(args):
                     "--debug", args.debug,
                     "--num_chunks", str(num_chunks),
                     "--chunk_idx", str(idx)]
+            if args.n_samples is not None:
+                cmd += ["--n_samples", str(args.n_samples)]
+            if args.synth_only:
+                cmd += ["--synth_only", "true"]
+            cmd += ["--group_shared", args.group_shared]
             p = multiprocessing.Process(target=exec, args=(cmd, True, f'{4*idx},{4*idx+1},{4*idx+2},,{4*idx+3}' if args.model=='llava_ov_72b' else str(idx)))  # llava_ov_72b needs 4x 80GB GPUs
             processes.append(p)
             p.start()
@@ -90,7 +100,7 @@ def eval_egoschema(args):
         # QA
         processes = []
         for idx in range(0, num_chunks):
-            cmd = ["python", f"video_qa/{solver}.py",
+            cmd = ["python", "-m", f"video_qa.{solver}",
                     "--model", args.model,
                     "--sample_fps", str(args.sample_fps),
                     "--n_local", str(args.n_local),
@@ -100,6 +110,11 @@ def eval_egoschema(args):
                     "--debug", args.debug,
                     "--num_chunks", str(num_chunks),
                     "--chunk_idx", str(idx)]
+            if args.n_samples is not None:
+                cmd += ["--n_samples", str(args.n_samples)]
+            if args.synth_only:
+                cmd += ["--synth_only", "true"]
+            cmd += ["--group_shared", args.group_shared]
             p = multiprocessing.Process(target=exec, args=(cmd, True, f'{4*idx},{4*idx+1},{4*idx+2},,{4*idx+3}' if args.model=='llava_ov_72b' else str(idx)))  # llava_ov_72b needs 4x 80GB GPUs
             processes.append(p)
             p.start()
@@ -123,7 +138,7 @@ def eval_activitynet_qa(args):
         # QA
         processes = []
         for idx in range(0, num_chunks):
-            cmd = ["python", f"video_qa/{solver}.py",
+            cmd = ["python", "-m", f"video_qa.{solver}",
                     "--model", args.model,
                     "--sample_fps", str(args.sample_fps),
                     "--n_local", str(args.n_local),
@@ -133,6 +148,11 @@ def eval_activitynet_qa(args):
                     "--debug", args.debug,
                     "--num_chunks", str(num_chunks),
                     "--chunk_idx", str(idx)]
+            if args.n_samples is not None:
+                cmd += ["--n_samples", str(args.n_samples)]
+            if args.synth_only:
+                cmd += ["--synth_only", "true"]
+            cmd += ["--group_shared", args.group_shared]
             p = multiprocessing.Process(target=exec, args=(cmd, True, f'{4*idx},{4*idx+1},{4*idx+2},,{4*idx+3}' if args.model=='llava_ov_72b' else str(idx)))  # llava_ov_72b needs 4x 80GB GPUs
             processes.append(p)
             p.start()
@@ -157,7 +177,7 @@ def eval_rvs_ego(args):
         # QA
         processes = []
         for idx in range(0, num_chunks):
-            cmd = ["python", f"video_qa/{solver}.py",
+            cmd = ["python", "-m", f"video_qa.{solver}",
                     "--model", args.model,
                     "--sample_fps", str(args.sample_fps),
                     "--n_local", str(args.n_local),
@@ -167,6 +187,11 @@ def eval_rvs_ego(args):
                     "--debug", args.debug,
                     "--num_chunks", str(num_chunks),
                     "--chunk_idx", str(idx)]
+            if args.n_samples is not None:
+                cmd += ["--n_samples", str(args.n_samples)]
+            if args.synth_only:
+                cmd += ["--synth_only", "true"]
+            cmd += ["--group_shared", args.group_shared]
             p = multiprocessing.Process(target=exec, args=(cmd, True, f'{4*idx},{4*idx+1},{4*idx+2},,{4*idx+3}' if args.model=='llava_ov_72b' else str(idx)))  # llava_ov_72b needs 4x 80GB GPUs
             processes.append(p)
             p.start()
@@ -191,7 +216,7 @@ def eval_rvs_movie(args):
         # QA
         processes = []
         for idx in range(0, num_chunks):
-            cmd = ["python", f"video_qa/{solver}.py",
+            cmd = ["python", "-m", f"video_qa.{solver}",
                     "--model", args.model,
                     "--sample_fps", str(args.sample_fps),
                     "--n_local", str(args.n_local),
@@ -201,6 +226,11 @@ def eval_rvs_movie(args):
                     "--debug", args.debug,
                     "--num_chunks", str(num_chunks),
                     "--chunk_idx", str(idx)]
+            if args.n_samples is not None:
+                cmd += ["--n_samples", str(args.n_samples)]
+            if args.synth_only:
+                cmd += ["--synth_only", "true"]
+            cmd += ["--group_shared", args.group_shared]
             p = multiprocessing.Process(target=exec, args=(cmd, True, f'{4*idx},{4*idx+1},{4*idx+2},,{4*idx+3}' if args.model=='llava_ov_72b' else str(idx)))  # llava_ov_72b needs 4x 80GB GPUs
             processes.append(p)
             p.start()
@@ -225,7 +255,7 @@ def eval_cgbench(args):
         # QA
         processes = []
         for idx in range(0, num_chunks):
-            cmd = ["python", f"video_qa/{solver}.py",
+            cmd = ["python", "-m", f"video_qa.{solver}",
                     "--model", args.model,
                     "--sample_fps", str(args.sample_fps),
                     "--n_local", str(args.n_local),
@@ -235,6 +265,11 @@ def eval_cgbench(args):
                     "--debug", args.debug,
                     "--num_chunks", str(num_chunks),
                     "--chunk_idx", str(idx)]
+            if args.n_samples is not None:
+                cmd += ["--n_samples", str(args.n_samples)]
+            if args.synth_only:
+                cmd += ["--synth_only", "true"]
+            cmd += ["--group_shared", args.group_shared]
             p = multiprocessing.Process(target=exec, args=(cmd, True, f'{4*idx},{4*idx+1},{4*idx+2},,{4*idx+3}' if args.model=='llava_ov_72b' else str(idx)))  # llava_ov_72b needs 4x 80GB GPUs
             processes.append(p)
             p.start()
@@ -261,6 +296,11 @@ if __name__ == "__main__":
     parser.add_argument("--n_local", type=int, default=15000)
     parser.add_argument("--retrieve_size", type=int, default=64)
     parser.add_argument("--debug", type=str, default='false')
+    parser.add_argument("--n_samples", type=int, default=None, help="Number of video samples to test (overrides --debug)")
+    parser.add_argument("--synth_only", action="store_true", default=False,
+                        help="Only train Neural KV with synthetic Q (skip K-as-Q and real Q)")
+    parser.add_argument("--group_shared", type=str, default='true',
+                        help="Use one MLP per GQA group (true) or per head (false)")
     args = parser.parse_args()
     func_dic = {
         'mlvu': eval_mlvu,

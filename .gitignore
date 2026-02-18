@@ -24,6 +24,7 @@ log*
 # Other
 .DS_Store
 .vscode
+*.whl
 data/*
 !data/.gitkeep
 model_zoo/*

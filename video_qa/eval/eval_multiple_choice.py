@@ -76,6 +76,34 @@ else:
 for metric in metrics:
     calc_average_metric(results, args.save_dir, metric)# vmin=0, vmax=100)
 
+# No-Video baseline accuracy (if present)
+if 'novid_qa_acc' in df.columns:
+    print(f'\n--- No-Video Baseline Results ---')
+    calc_average_metric(results, args.save_dir, 'novid_qa_acc')
+
+# Neural KV accuracy (if present)
+if 'nkv_qa_acc' in df.columns:
+    print(f'\n--- Neural KV Results ---')
+    nkv_metrics = ['nkv_qa_acc']
+    for metric in nkv_metrics:
+        calc_average_metric(results, args.save_dir, metric)
+
+    # Side-by-side summary
+    if 'qa_acc' in df.columns:
+        orig_acc = df['qa_acc'].mean()
+        nkv_acc = df['nkv_qa_acc'].mean()
+        novid_acc = df['novid_qa_acc'].mean() if 'novid_qa_acc' in df.columns else None
+        print(f'\n========== Final Summary ==========')
+        if novid_acc is not None:
+            print(f'  NoVideo acc:   {novid_acc:.2f}%')
+        print(f'  Original acc:  {orig_acc:.2f}%')
+        print(f'  NeuralKV acc:  {nkv_acc:.2f}%')
+        if novid_acc is not None:
+            print(f'  Delta (Orig vs NoVid):  {orig_acc - novid_acc:+.2f}%')
+            print(f'  Delta (NKV  vs NoVid):  {nkv_acc - novid_acc:+.2f}%')
+        print(f'  Delta (NKV  vs Orig):  {nkv_acc - orig_acc:+.2f}%')
+        print(f'===================================')
+
 if 'pred_choice' in df.columns:
     n_errors = 0
     for _, row in df.iterrows():
